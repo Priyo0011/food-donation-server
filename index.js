@@ -72,7 +72,7 @@ async function run() {
       res.send(result)
     })
 
-    app.put('/Food/:id', async (req, res) => {
+    app.put('/food/:id', async (req, res) => {
       const id = req.params.id
       const foodData = req.body
       const query = { _id: new ObjectId(id) }
@@ -83,6 +83,13 @@ async function run() {
         },
       }
       const result = await foodsDonation.updateOne(query, updateDoc, options)
+      res.send(result)
+    })
+
+    app.get('/request/:email', async (req, res) => {
+      const email = req.params.email
+      const query = { email }
+      const result = await requestFood.find(query).toArray()
       res.send(result)
     })
 
