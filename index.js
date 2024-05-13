@@ -8,13 +8,31 @@ const app = express();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const corsOptions = {
-  origin: ["http://localhost:5173", "http://localhost:5174"],
+  origin: ["http://localhost:5173", "http://localhost:5174","https://food-donation-3460d.web.app"],
   credentials: true,
   optionSuccessStatus: 200,
 };
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
+
+// verify jwt middleware
+const verifyToken = (req, res, next) => {
+  const token = req.cookies?.token;
+  if (!token) return res.status(401).send({ message: "unauthorized access" });
+  if (token) {
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+      if (err) {
+        console.log(err);
+        return res.status(401).send({ message: "unauthorized access" });
+      }
+      console.log(decoded);
+
+      req.user = decoded;
+      next();
+    });
+  }
+};
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.32bwvbv.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -34,8 +52,8 @@ async function run() {
 
     // jwt generate
     app.post("/jwt", async (req, res) => {
-      const email = req.body;
-      const token = jwt.sign(email, process.env.ACCESS_TOKEN_SECRET, {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
         expiresIn: "365d",
       });
       res
@@ -79,7 +97,7 @@ async function run() {
       const result = await foodsDonation.insertOne(foodData);
       res.send(result);
     });
-    app.get("/foods/:email", async (req, res) => {
+    app.get("/foods/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
       const query = { "donator.email": email };
       const result = await foodsDonation.find(query).toArray();
@@ -92,7 +110,7 @@ async function run() {
       res.send(result);
     });
 
-    app.put("/food/:id", async (req, res) => {
+    app.put("/food/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const foodData = req.body;
       const query = { _id: new ObjectId(id) };
@@ -111,6 +129,38 @@ async function run() {
       const query = { email };
       const result = await requestFood.find(query).toArray();
       res.send(result);
+    });
+
+    app.get("/all-foods", async (req, res) => {
+      const size = parseInt(req.query.size);
+      const page = parseInt(req.query.page) -1;
+      const sort = req.query.sort;
+      const search = req.query.search;
+
+
+      let query = {
+        food_name: { $regex: search, $options: "i" },
+      };
+    
+      let options = {};
+      if (sort) options = { sort: { expire: sort === "asc" ? 1 : -1 } };
+      const result = await foodsDonation
+        .find(query,options)
+        .skip(page * size)
+        .limit(size)
+        .toArray();
+
+      res.send(result);
+    });
+
+    app.get("/foods-count", async (req, res) => {
+      const search = req.query.search
+      let query = {
+        food_name : { $regex: search, $options: 'i' },
+      }
+      const count = await foodsDonation.countDocuments(query);
+      
+      res.send({ count });
     });
 
     // Send a ping to confirm a successful connection
